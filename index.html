@@ -67,6 +67,14 @@
                     <label for="project-personnel" class="block text-sm font-medium text-gray-600 mb-1">Nama Personil</label>
                     <input type="text" id="project-personnel" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
+                 <div>
+                    <label for="project-applicant" class="block text-sm font-medium text-gray-600 mb-1">Nama Pemohon</label>
+                    <input type="text" id="project-applicant" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="project-applicant-location" class="block text-sm font-medium text-gray-600 mb-1">Lokasi Pemohon</label>
+                    <input type="text" id="project-applicant-location" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Contoh: Jakarta">
+                </div>
             </div>
         </div>
 
@@ -204,7 +212,6 @@
                 <h2 class="text-xl font-semibold text-gray-700">Laporan & Riwayat</h2>
                 <div class="flex items-center gap-2">
                     <button id="preview-report-btn" class="btn btn-primary"><i class="fas fa-eye mr-2"></i>Preview Laporan</button>
-                    <button id="export-csv-btn" class="btn btn-secondary"><i class="fas fa-file-csv mr-2"></i>Unduh Cepat CSV</button>
                 </div>
             </div>
             <div class="overflow-x-auto mt-4">
@@ -244,7 +251,14 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
-    const projectInfoFields = { name: document.getElementById('project-name'), location: document.getElementById('project-location'), personnel: document.getElementById('project-personnel'), activity: document.getElementById('project-activity') };
+    const projectInfoFields = { 
+        name: document.getElementById('project-name'), 
+        location: document.getElementById('project-location'), 
+        personnel: document.getElementById('project-personnel'), 
+        activity: document.getElementById('project-activity'),
+        applicant: document.getElementById('project-applicant'),
+        applicantLocation: document.getElementById('project-applicant-location')
+    };
     const initialBudgetInput = document.getElementById('initial-budget');
     const budgetDateInput = document.getElementById('budget-date');
     const setBudgetBtn = document.getElementById('set-budget-btn');
@@ -259,7 +273,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelEditBtn = document.getElementById('cancel-edit-btn');
     const expenseTableBody = document.getElementById('expense-table-body');
     const noDataMessage = document.getElementById('no-data-message');
-    const exportCsvBtn = document.getElementById('export-csv-btn');
     const previewReportBtn = document.getElementById('preview-report-btn');
     const standardInputs = document.getElementById('standard-inputs');
     const supervisiInputs = document.getElementById('supervisi-inputs');
@@ -284,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- App State ---
     let state = {
-        projectInfo: { name: '', location: '', personnel: '', activity: '' },
+        projectInfo: { name: '', location: '', personnel: '', activity: '', applicant: '', applicantLocation: '' },
         budget: { amount: 0, date: '' },
         expenses: [],
         editingId: null,
@@ -362,6 +375,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (savedState) {
             state = JSON.parse(savedState);
             state.expenses = state.expenses || [];
+             // Ensure new fields exist
+            if (!state.projectInfo.applicant) state.projectInfo.applicant = '';
+            if (!state.projectInfo.applicantLocation) state.projectInfo.applicantLocation = '';
         }
     };
     function formatCurrencyInput(e) {
@@ -527,7 +543,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderProjectInfo = () => {
         for (const key in projectInfoFields) {
-            projectInfoFields[key].value = state.projectInfo[key] || '';
+            if(projectInfoFields[key]) {
+                projectInfoFields[key].value = state.projectInfo[key] || '';
+            }
         }
     };
 
@@ -580,10 +598,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Handlers ---
     Object.keys(projectInfoFields).forEach(key => {
-        projectInfoFields[key].addEventListener('blur', (e) => {
-            state.projectInfo[key] = e.target.value;
-            saveState();
-        });
+        if(projectInfoFields[key]) {
+            projectInfoFields[key].addEventListener('blur', (e) => {
+                state.projectInfo[key] = e.target.value;
+                saveState();
+            });
+        }
     });
 
     [initialBudgetInput, standardAmount, supervisiRateWork, supervisiRateHoliday].forEach(input => {
@@ -750,46 +770,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
     
-    function getCsvContent(data) {
-        let csvContent = "INFORMASI PROYEK\r\n";
-        csvContent += `Proyek,"${data.projectInfo.name}"\r\n`;
-        csvContent += `Lokasi,"${data.projectInfo.location}"\r\n`;
-        csvContent += `Kegiatan,"${data.projectInfo.activity}"\r\n`;
-        csvContent += `Personil,"${data.projectInfo.personnel}"\r\n\r\n`;
-        csvContent += "REKAPITULASI PENGELUARAN UANG\r\n";
-        csvContent += `Tanggal Diterima,"${formatDateForReport(data.budget.date)}"\r\n\r\n`;
-        csvContent += "No.,Uraian,Debet,Kredit\r\n";
-        csvContent += `1,"Uang Diterima Tgl ${formatDateForReport(data.budget.date)}",${data.budget.amount},\r\n`;
-        
-        const sortedExpenses = [...data.expenses].sort((a, b) => new Date(a.date) - new Date(b.date));
-        sortedExpenses.forEach((exp, index) => {
-            const row = [`${index + 2}`, `"${exp.description.replace(/"/g, '""')}"`, ``, exp.amount].join(",");
-            csvContent += row + "\r\n";
-        });
-
-        const totalExpenses = data.expenses.reduce((sum, exp) => sum + exp.amount, 0);
-        const balance = data.budget.amount - totalExpenses;
-        csvContent += `\r\n,Total,${data.budget.amount},${totalExpenses}\r\n`;
-        csvContent += `,Balanced,,"${balance > 0 ? balance : '(' + Math.abs(balance) + ')'}"\r\n`;
-        return csvContent;
-    }
-
-    function downloadCsv(data) {
-        const csvContent = getCsvContent(data);
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        const fileName = data.projectInfo.activity ? data.projectInfo.activity.replace(/\s/g, '_') : 'laporan';
-        link.setAttribute("href", url);
-        link.setAttribute("download", `laporan_pengeluaran_${fileName}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-
-    exportCsvBtn.addEventListener('click', () => downloadCsv(state));
-
     previewReportBtn.addEventListener('click', () => {
         const totalExpenses = state.expenses.reduce((sum, exp) => sum + exp.amount, 0);
         const balance = state.budget.amount - totalExpenses;
@@ -798,17 +778,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const sortedExpenses = [...state.expenses].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const expenseRowsHTML = sortedExpenses.map((exp, index) => {
-            let descriptionHtml = exp.description;
-            if (exp.category === 'Uang Supervisi' && exp.details?.holidayDetails?.length > 0) {
-                const holidayList = exp.details.holidayDetails.map(h => 
-                    `<li>${formatDateForReport(h.date, {day: 'numeric', month: 'short'})}: ${h.name}</li>`
-                ).join('');
-                descriptionHtml += `<br/><div style="font-size: 10px; color: #555; padding-left: 10px;">Ket. Libur:<ul style="margin: 0; padding-left: 15px;">${holidayList}</ul></div>`;
+            let finalDescription;
+
+            if (exp.category === 'Uang Supervisi' && exp.details) {
+                const { name, workCount, holidayCount, description: additionalDesc, holidayDetails } = exp.details;
+                const period = `periode ${formatDateForReport(exp.date)} - ${formatDateForReport(exp.endDate)}`;
+                const counts = `(${workCount} hari kerja, ${holidayCount} hari libur)`;
+                
+                finalDescription = `Uang Supervisi ${name} ${period} ${counts}`;
+                if (additionalDesc) {
+                    finalDescription += ` - ${additionalDesc}`;
+                }
+
+                if (holidayDetails?.length > 0) {
+                    const holidayList = holidayDetails.map(h => 
+                        `<li>${formatDateForReport(h.date, {day: 'numeric', month: 'short'})}: ${h.name}</li>`
+                    ).join('');
+                    finalDescription += `<br/><div style="font-size: 10px; color: #555; padding-left: 10px;">Ket. Libur:<ul style="margin: 0; padding-left: 15px;">${holidayList}</ul></div>`;
+                }
+            } else {
+                finalDescription = `${formatDateForReport(exp.date)} ${exp.description}`;
             }
+
             return `
                 <tr>
                     <td class="text-center">${index + 2}</td>
-                    <td>${descriptionHtml}</td>
+                    <td>${finalDescription}</td>
                     <td class="text-right">-</td>
                     <td class="text-right">${formatToCurrency(exp.amount)}</td>
                 </tr>
@@ -859,7 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         top: 50%;
                         transform: translateY(-50%);
                         left: 0;
-                        height: 28px; /* Logo diperkecil 30% dari 40px */
+                        height: 28px; /* Logo diperkecil */
                     }
                     .report-header h1 {
                         margin: 0;
@@ -925,9 +920,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     <footer class="mt-16 flex justify-end text-sm">
                         <div class="text-center">
-                            <p>Jakarta, ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                            <p>${state.projectInfo.applicantLocation || 'Jakarta'}, ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                             <p class="mb-16">Yang mengajukan,</p>
-                            <p class="font-semibold underline">${state.projectInfo.personnel || '( Nama Personil )'}</p>
+                            <p class="font-semibold underline">${state.projectInfo.applicant || '( Nama Pemohon )'}</p>
                         </div>
                     </footer>
                 </div>
