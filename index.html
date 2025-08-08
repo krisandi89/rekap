@@ -347,10 +347,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const formatToCurrency = (amount) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
     const formatForInputCurrency = (amount) => amount > 0 ? 'Rp ' + new Intl.NumberFormat('id-ID').format(amount) : '';
     
-    const formatDateForReport = (dateString, options = { day: '2-digit', month: 'short', year: 'numeric' }) => {
+    const formatDateForReport = (dateString, options = { day: '2-digit', month: 'long', year: 'numeric' }) => {
         if (!dateString) return '';
-        const [year, month, day] = dateString.split('-');
-        const date = new Date(year, month - 1, day);
+        // Using T00:00:00 ensures the date is parsed in the local timezone, preventing off-by-one day errors on mobile.
+        const date = new Date(dateString + 'T00:00:00');
         return date.toLocaleDateString('id-ID', options);
     };
     
@@ -375,7 +375,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (savedState) {
             state = JSON.parse(savedState);
             state.expenses = state.expenses || [];
-             // Ensure new fields exist
+             // Ensure new fields exist for backward compatibility
+            if (!state.projectInfo) state.projectInfo = {};
             if (!state.projectInfo.applicant) state.projectInfo.applicant = '';
             if (!state.projectInfo.applicantLocation) state.projectInfo.applicantLocation = '';
         }
@@ -504,7 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let descriptionHtml = exp.description;
                 if (exp.category === 'Uang Supervisi' && exp.details?.holidayDetails?.length > 0) {
                     const holidayList = exp.details.holidayDetails.map(h => 
-                        `<li>${formatDateForReport(h.date, {day: 'numeric', month: 'short'})}: ${h.name}</li>`
+                        `<li>${formatDateForReport(h.date, {day: 'numeric', month: 'long'})}: ${h.name}</li>`
                     ).join('');
                     descriptionHtml += `<ul class="text-xs text-gray-500 mt-1 pl-4 list-disc">Ket. Libur:${holidayList}</ul>`;
                 }
@@ -779,10 +780,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const expenseRowsHTML = sortedExpenses.map((exp, index) => {
             let finalDescription;
+            const longDateOptions = { day: '2-digit', month: 'long', year: 'numeric' };
 
             if (exp.category === 'Uang Supervisi' && exp.details) {
                 const { name, workCount, holidayCount, description: additionalDesc, holidayDetails } = exp.details;
-                const period = `periode ${formatDateForReport(exp.date)} - ${formatDateForReport(exp.endDate)}`;
+                const period = `periode ${formatDateForReport(exp.date, longDateOptions)} - ${formatDateForReport(exp.endDate, longDateOptions)}`;
                 const counts = `(${workCount} hari kerja, ${holidayCount} hari libur)`;
                 
                 finalDescription = `Uang Supervisi ${name} ${period} ${counts}`;
@@ -792,12 +794,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (holidayDetails?.length > 0) {
                     const holidayList = holidayDetails.map(h => 
-                        `<li>${formatDateForReport(h.date, {day: 'numeric', month: 'short'})}: ${h.name}</li>`
+                        `<li>${formatDateForReport(h.date, {day: 'numeric', month: 'long'})}: ${h.name}</li>`
                     ).join('');
                     finalDescription += `<br/><div style="font-size: 10px; color: #555; padding-left: 10px;">Ket. Libur:<ul style="margin: 0; padding-left: 15px;">${holidayList}</ul></div>`;
                 }
             } else {
-                finalDescription = `${formatDateForReport(exp.date)} ${exp.description}`;
+                finalDescription = `${formatDateForReport(exp.date, longDateOptions)} ${exp.description}`;
             }
 
             return `
@@ -897,7 +899,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <tbody>
                                 <tr>
                                     <td class="text-center">1</td>
-                                    <td>Uang Diterima Tgl ${formatDateForReport(state.budget.date)}</td>
+                                    <td>Uang Diterima Tgl ${formatDateForReport(state.budget.date, { day: '2-digit', month: 'long', year: 'numeric' })}</td>
                                     <td class="text-right">${formatToCurrency(state.budget.amount)}</td>
                                     <td class="text-right">-</td>
                                 </tr>
